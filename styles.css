@@ -1,0 +1,23 @@
+#live-minutes {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    height: 100%;
+    width: max(30%, 600px);
+    border: 0;
+}
+
+#dataDump {
+    width: min(70%, 100vw - 600px);
+}
+
+#speaker-list {
+    height: 300px;
+}
+
+#bill,
+#speaker-list,
+#awaited-speaker {
+    text-transform: uppercase;
+}
