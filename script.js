@@ -1,11 +1,11 @@
 const url = "https://script.google.com/macros/s/AKfycbwaF6fjMSKBsactYtgMGsZRYM_Ey5ZKiW7RsIsIYic96gJVZOFS2G-wm3yV1E-8Xpvv/exec";
 const formValues = [
     "bill",
-    "speaker-list",
-    "awaited-speaker"
+    "speaker-list"
 ];
 
 let billDebates = [];
+let isFirstLoad = true;
 
 function parseDoc(doc) {
     // Get bill debate program items
@@ -61,6 +61,17 @@ function parseDoc(doc) {
             }
 
             let speaker = couple[0].trim();
+            
+            // Skip "Point of order" entries
+            if (speaker.toLowerCase() === "point of order") {
+                continue;
+            }
+            
+            // Skip if same speaker as last entry
+            if (debateTurns.length > 0 && normaliseName(debateTurns[debateTurns.length - 1].speaker) === normaliseName(speaker)) {
+                continue;
+            }
+            
             let time = parseTime(minutesDate, couple[1].trim());
             debateTurns.push({speaker: speaker, time: time});
         }
@@ -96,6 +107,13 @@ function fetchLiveMinutes() {
         }
         billDebates = parseDoc(data);
         document.getElementById("dataDump").innerHTML = JSON.stringify(billDebates);
+        
+        // Auto-populate on first load if no URL params
+        if (isFirstLoad) {
+            isFirstLoad = false;
+            autoPopulateFromLastDebate();
+        }
+        
         estimateTime();
     })
     .catch(error => {
@@ -136,30 +154,24 @@ function normaliseName(name) {
 }
 
 function estimateTime() {
-    const expectedSpeakerList = document.getElementById("speaker-list").value.split("\n");
-    const awaitedSpeaker = document.getElementById("awaited-speaker").value;
+    const expectedSpeakerList = document.getElementById("speaker-list").value.split("\n").filter(line => line.trim() !== "");
     const billId = billTitleToID(document.getElementById("bill").value);
     const billDebate = billDebates.find(billDebate => billDebate.billId === billId);
+    const timelineEl = document.getElementById("speaker-timeline");
 
-    // If bill not found, stop
-    if (billDebate == null) {
-        document.getElementById("time-estimate").textContent = "Estimated time: Unknown";
+    // If no speakers, show empty state
+    if (expectedSpeakerList.length === 0) {
+        timelineEl.innerHTML = '<div class="timeline-empty">Enter speakers above to see estimated times</div>';
         return;
     }
 
-    // Get number of lines before awaitedSpeaker
-    let linesBeforeAwaitedSpeaker = 0;
-    for (const expectedSpeaker of expectedSpeakerList) {
-        if (normaliseName(expectedSpeaker) === normaliseName(awaitedSpeaker)) {
-            break;
-        }
-        linesBeforeAwaitedSpeaker++;
-    }
-    if (linesBeforeAwaitedSpeaker === expectedSpeakerList.length) {
-        linesBeforeAwaitedSpeaker = null;
+    // If bill not found, show error
+    if (billDebate == null) {
+        timelineEl.innerHTML = '<div class="timeline-error">Bill not found in live data</div>';
+        return;
     }
 
-    // Get last matched speaker's timestamp
+    // Get last matched speaker's timestamp and index
     let lastMatchEndTime = null;
     let linesBeforeLastMatchedSpeaker = 0;
     for (let i = billDebate.debateTurns.length - 1; i >= 0; i--) {
@@ -179,18 +191,56 @@ function estimateTime() {
         }
     }
 
-    // If insufficient data, set estimated time to unknown
-    if (!linesBeforeAwaitedSpeaker || !lastMatchEndTime) {
-        document.getElementById("time-estimate").textContent = "Estimated time: Unknown";
+    // If insufficient data, show error
+    if (!lastMatchEndTime) {
+        timelineEl.innerHTML = '<div class="timeline-error">No matching speakers found in live data yet</div>';
         return;
     }
 
-    // Calculate estimated time
-    const minutesToNextSpeaker = 15 * (linesBeforeAwaitedSpeaker - linesBeforeLastMatchedSpeaker);
-    let expectedTime = new Date(lastMatchEndTime);
-    expectedTime.setMinutes(expectedTime.getMinutes() + minutesToNextSpeaker);
-    const expectedTimeText = `${expectedTime.getHours().toString().padStart(2, "0")}:${expectedTime.getMinutes().toString().padStart(2, "0")}:${expectedTime.getSeconds().toString().padStart(2, "0")}`;
-    document.getElementById("time-estimate").textContent = `Estimated time: ${expectedTimeText}, ${countDown(expectedTime)}`;
+    // Calculate times for all speakers
+    let html = '';
+    
+    expectedSpeakerList.forEach((speaker, index) => {
+        const speakerName = speaker.trim();
+        const minutesToSpeaker = 15 * (index - linesBeforeLastMatchedSpeaker);
+        let expectedTime = new Date(lastMatchEndTime);
+        expectedTime.setMinutes(expectedTime.getMinutes() + minutesToSpeaker);
+        
+        const expectedTimeText = `${expectedTime.getHours().toString().padStart(2, "0")}:${expectedTime.getMinutes().toString().padStart(2, "0")}`;
+        const countdown = countDown(expectedTime);
+        
+        // Determine status
+        let status = '';
+        let statusClass = '';
+        const now = new Date().getTime();
+        const timeDiff = expectedTime - now;
+        
+        if (index <= linesBeforeLastMatchedSpeaker) {
+            status = 'Completed';
+            statusClass = 'completed';
+        } else if (timeDiff < 0) {
+            status = countdown;
+            statusClass = 'overdue';
+        } else if (timeDiff < 5 * 60 * 1000) {
+            status = countdown;
+            statusClass = 'imminent';
+        } else {
+            status = countdown;
+            statusClass = 'upcoming';
+        }
+        
+        html += `
+            <div class="speaker-item ${statusClass}">
+                <div class="speaker-info">
+                    <div class="speaker-name">${speakerName}</div>
+                    <div class="speaker-status">${status}</div>
+                </div>
+                <div class="speaker-time">${expectedTimeText}</div>
+            </div>
+        `;
+    });
+    
+    timelineEl.innerHTML = html;
 }
 
 function levenshtein(a, b) {
@@ -236,15 +286,86 @@ function billTitleMatch(title1, title2) {
     return levenshtein(title1, title2) <= 4;
 }
 
-function saveFormValuesToCookie() {
-    const formValuesCookieName = "formValues";
-    const expiratoryDate = new Date();
-    expiratoryDate.setTime(expiratoryDate.getTime() + (365*24*60*60*1000));
-    const expiryString = `expires=${expiratoryDate.toUTCString()}; path=/`;
+function saveFormValuesToURL() {
+    const params = new URLSearchParams();
+    formValues.forEach(id => {
+        const value = document.getElementById(id).value;
+        if (value) {
+            params.set(id, value);
+        }
+    });
+    const newURL = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, '', newURL);
+}
 
-    const formValuesJSON = JSON.stringify(Object.fromEntries(formValues.map(id => [id, document.getElementById(id).value])));
-    const formValuesBase64 = btoa(formValuesJSON);
-    document.cookie = `${formValuesCookieName}=${formValuesBase64}; ${expiryString}`;
+function loadFormValuesFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    formValues.forEach(id => {
+        const value = params.get(id);
+        if (value) {
+            document.getElementById(id).value = value;
+        }
+    });
+}
+
+function autoPopulateFromLastDebate() {
+    // Check if URL has any parameters
+    const params = new URLSearchParams(window.location.search);
+    const hasParams = params.has('bill') || params.has('speaker-list');
+    
+    // If params exist or no debates available, don't auto-populate
+    if (hasParams || billDebates.length === 0) {
+        return;
+    }
+    
+    // Try to find the last debate with more than 1 speaker
+    let selectedDebate = null;
+    for (let i = billDebates.length - 1; i >= 0; i--) {
+        if (billDebates[i].debateTurns && billDebates[i].debateTurns.length > 1) {
+            selectedDebate = billDebates[i];
+            break;
+        }
+    }
+    
+    // If no debate with multiple speakers, just use the last debate
+    if (!selectedDebate) {
+        selectedDebate = billDebates[billDebates.length - 1];
+    }
+    
+    // Populate bill name
+    document.getElementById('bill').value = selectedDebate.billName;
+    
+    // Populate speaker list from debate turns
+    const speakers = selectedDebate.debateTurns.map(turn => turn.speaker).join('\n');
+    document.getElementById('speaker-list').value = speakers;
+    
+    // Trigger estimateTime to update the timeline display
+    estimateTime();
+}
+
+function copyShareLink() {
+    // Generate URL with current form values
+    const params = new URLSearchParams();
+    formValues.forEach(id => {
+        const value = document.getElementById(id).value;
+        if (value) {
+            params.set(id, value);
+        }
+    });
+    const shareURL = `${window.location.pathname}?${params.toString()}`;
+    
+    navigator.clipboard.writeText(shareURL).then(() => {
+        const btn = document.getElementById('share-btn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!';
+        btn.style.background = 'rgba(125, 211, 252, 0.2)';
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.style.background = '';
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+    });
 }
 
 function cleanTextArea(textAreaId) {
@@ -259,7 +380,18 @@ function cleanTextArea(textAreaId) {
     textArea.dispatchEvent(inputEvent);
 }
 
-// Fetch speaker history every 20 seconds
+// Clean text areas when the user clicks away
+formValues.forEach(id => {
+    const element = document.getElementById(id);
+    if (element.tagName === "TEXTAREA") {
+        element.addEventListener("blur", () => cleanTextArea(id));
+    }
+});
+
+// Load form values from URL parameters on page load
+loadFormValuesFromURL();
+
+// Fetch speaker history every 20 seconds (first fetch will auto-populate if no URL params)
 fetchLiveMinutes();
 setInterval(fetchLiveMinutes, 20_000);
 
@@ -270,18 +402,5 @@ setInterval(estimateTime, 1_000);
 // Estimate time when form values change
 formValues.forEach(id => document.getElementById(id).addEventListener("input", estimateTime));
 
-// Save form values to cookie when they change
-formValues.forEach(id => document.getElementById(id).addEventListener("input", saveFormValuesToCookie));
-
-// Load form values from cookie
-const formValuesCookie = document.cookie.replace(/(?:(?:^|.*;\s*)formValues\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-if (formValuesCookie) {
-    const formValuesJSON = atob(formValuesCookie);
-    const formValues = JSON.parse(formValuesJSON);
-    for (const [key, value] of Object.entries(formValues)) {
-        document.getElementById(key).value = value;
-    }
-}
-
-// Clean text areas when the user clicks away
-formValues.forEach(id => document.getElementById(id).addEventListener("blur", () => cleanTextArea(id)));
+// Share button handler
+document.getElementById('share-btn').addEventListener('click', copyShareLink);
