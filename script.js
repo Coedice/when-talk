@@ -161,13 +161,13 @@ function estimateTime() {
 
     // If no speakers, show empty state
     if (expectedSpeakerList.length === 0) {
-        timelineEl.innerHTML = '<div class="timeline-empty">Enter speakers above to see estimated times</div>';
+        timelineEl.innerHTML = "<div class=\"timeline-empty\">Enter speakers above to see estimated times</div>";
         return;
     }
 
     // If bill not found, show error
     if (billDebate == null) {
-        timelineEl.innerHTML = '<div class="timeline-error">Bill not found in live data</div>';
+        timelineEl.innerHTML = "<div class=\"timeline-error\">Bill not found in live data</div>";
         return;
     }
 
@@ -193,12 +193,12 @@ function estimateTime() {
 
     // If insufficient data, show error
     if (!lastMatchEndTime) {
-        timelineEl.innerHTML = '<div class="timeline-error">No matching speakers found in live data yet</div>';
+        timelineEl.innerHTML = "<div class=\"timeline-error\">No matching speakers found in live data yet</div>";
         return;
     }
 
     // Calculate times for all speakers
-    let html = '';
+    let html = "";
     
     expectedSpeakerList.forEach((speaker, index) => {
         const speakerName = speaker.trim();
@@ -210,23 +210,23 @@ function estimateTime() {
         const countdown = countDown(expectedTime);
         
         // Determine status
-        let status = '';
-        let statusClass = '';
+        let status = "";
+        let statusClass = "";
         const now = new Date().getTime();
         const timeDiff = expectedTime - now;
         
         if (index <= linesBeforeLastMatchedSpeaker) {
-            status = 'Completed';
-            statusClass = 'completed';
+            status = "Completed";
+            statusClass = "completed";
         } else if (timeDiff < 0) {
             status = countdown;
-            statusClass = 'overdue';
+            statusClass = "overdue";
         } else if (timeDiff < 5 * 60 * 1000) {
             status = countdown;
-            statusClass = 'imminent';
+            statusClass = "imminent";
         } else {
             status = countdown;
-            statusClass = 'upcoming';
+            statusClass = "upcoming";
         }
         
         html += `
@@ -286,18 +286,6 @@ function billTitleMatch(title1, title2) {
     return levenshtein(title1, title2) <= 4;
 }
 
-function saveFormValuesToURL() {
-    const params = new URLSearchParams();
-    formValues.forEach(id => {
-        const value = document.getElementById(id).value;
-        if (value) {
-            params.set(id, value);
-        }
-    });
-    const newURL = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState({}, '', newURL);
-}
-
 function loadFormValuesFromURL() {
     const params = new URLSearchParams(window.location.search);
     formValues.forEach(id => {
@@ -311,7 +299,7 @@ function loadFormValuesFromURL() {
 function autoPopulateFromLastDebate() {
     // Check if URL has any parameters
     const params = new URLSearchParams(window.location.search);
-    const hasParams = params.has('bill') || params.has('speaker-list');
+    const hasParams = params.has("bill") || params.has("speaker-list");
     
     // If params exist or no debates available, don't auto-populate
     if (hasParams || billDebates.length === 0) {
@@ -333,11 +321,11 @@ function autoPopulateFromLastDebate() {
     }
     
     // Populate bill name
-    document.getElementById('bill').value = selectedDebate.billName;
+    document.getElementById("bill").value = selectedDebate.billName;
     
     // Populate speaker list from debate turns
-    const speakers = selectedDebate.debateTurns.map(turn => turn.speaker).join('\n');
-    document.getElementById('speaker-list').value = speakers;
+    const speakers = selectedDebate.debateTurns.map(turn => turn.speaker).join("\n");
+    document.getElementById("speaker-list").value = speakers;
     
     // Trigger estimateTime to update the timeline display
     estimateTime();
@@ -355,16 +343,16 @@ function copyShareLink() {
     const shareURL = `${window.location.pathname}?${params.toString()}`;
     
     navigator.clipboard.writeText(shareURL).then(() => {
-        const btn = document.getElementById('share-btn');
+        const btn = document.getElementById("share-btn");
         const originalText = btn.innerHTML;
-        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!';
-        btn.style.background = 'rgba(125, 211, 252, 0.2)';
+        btn.innerHTML = "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"20 6 9 17 4 12\"></polyline></svg> Copied!";
+        btn.style.background = "rgba(125, 211, 252, 0.2)";
         setTimeout(() => {
             btn.innerHTML = originalText;
-            btn.style.background = '';
+            btn.style.background = "";
         }, 2000);
     }).catch(err => {
-        console.error('Failed to copy:', err);
+        console.error("Failed to copy:", err);
     });
 }
 
@@ -403,4 +391,4 @@ setInterval(estimateTime, 1_000);
 formValues.forEach(id => document.getElementById(id).addEventListener("input", estimateTime));
 
 // Share button handler
-document.getElementById('share-btn').addEventListener('click', copyShareLink);
+document.getElementById("share-btn").addEventListener("click", copyShareLink);

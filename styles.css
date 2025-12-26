@@ -358,6 +358,28 @@ select:focus {
     border: 0;
 }
 
+.page-footer {
+    margin-top: auto;
+    padding-top: 24px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.page-footer p {
+    margin: 8px 0;
+}
+
+.page-footer a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.page-footer a:hover {
+    color: #bae6fd;
+    text-decoration: underline;
+}
+
 @media (max-width: 1080px) {
     body {
         padding: 20px;
